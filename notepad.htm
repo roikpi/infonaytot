@@ -1,240 +1,102 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern Web Notepad</title>
-    <style>
-        :root {
-            --brand: #26224E;
-            --brand-light: #3a3475;
-            --bg: #f8f9fa;
-            --text-main: #2d3436;
-        }
+const editor = document.getElementById('editor');
+const lineNumbers = document.getElementById('line-numbers');
+let fileHandle = null; // Track the current file for "Save" vs "Save As"
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+function handleInput() {
+    updateLineNumbers();
+    updateStats();
+}
 
-        body {
-            background-color: var(--bg);
-            font-family: 'Inter', -apple-system, sans-serif;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        /* Modern Header */
-        header {
-            background-color: var(--brand);
-            padding: 12px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            color: white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 10;
-        }
-
-        .btn-group { display: flex; gap: 8px; }
-
-        button {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: white;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        button:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-1px);
-        }
-
-        button.primary {
-            background: #4e44af;
-            border: none;
-        }
-
-        /* Search Bar */
-        .search-container {
-            display: flex;
-            background: rgba(255, 255, 255, 0.05);
-            padding: 4px;
-            border-radius: 8px;
-            gap: 5px;
-        }
-
-        input {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-            padding: 6px 12px;
-            color: white;
-            font-size: 13px;
-            outline: none;
-        }
-
-        input::placeholder { color: rgba(255,255,255,0.5); }
-        input:focus { background: rgba(255, 255, 255, 0.15); border-color: rgba(255,255,255,0.4); }
-
-        /* Main Editor Area */
-        .container {
-            flex: 1;
-            display: flex;
-            position: relative;
-            background: white;
-            overflow: hidden;
-        }
-
-        /* Line Numbers */
-        #line-numbers {
-            width: 45px;
-            background: #f1f3f5;
-            color: #adb5bd;
-            font-family: 'JetBrains Mono', 'Fira Code', monospace;
-            font-size: 14px;
-            padding: 15px 5px;
-            text-align: right;
-            user-select: none;
-            overflow: hidden;
-            line-height: 1.6;
-        }
-
-        textarea {
-            flex: 1;
-            border: none;
-            outline: none;
-            padding: 15px;
-            font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-            font-size: 14px;
-            line-height: 1.6;
-            color: var(--text-main);
-            resize: none;
-            background: transparent;
-        }
-
-        /* Status Bar */
-        footer {
-            background: var(--brand);
-            color: rgba(255,255,255,0.7);
-            font-size: 11px;
-            padding: 6px 20px;
-            display: flex;
-            justify-content: flex-end;
-            gap: 25px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        /* Print Override */
-        @media print {
-            header, footer, #line-numbers { display: none !important; }
-            textarea { padding: 0; color: black; }
-        }
-    </style>
-</head>
-<body>
-
-<header>
-    <div class="btn-group">
-        <button onclick="newFile()">New</button>
-        <button onclick="loadFile()">Open</button>
-        <button onclick="saveFile()" class="primary">Save As</button>
-        <button onclick="window.print()">Print</button>
-    </div>
-
-    <div class="search-container">
-        <input type="text" id="findInput" placeholder="Find word...">
-        <input type="text" id="replaceInput" placeholder="Replace with...">
-        <button onclick="findAndReplace()">Replace All</button>
-    </div>
-</header>
-
-<div class="container">
-    <div id="line-numbers">1</div>
-    <textarea id="editor" spellcheck="false" oninput="handleInput()" onscroll="syncScroll()" onclick="updateStats()" onkeyup="updateStats()"></textarea>
-</div>
-
-<footer>
-    <span id="charCount">Chars: 0</span>
-    <span id="lnCol">Ln 1, Col 1</span>
-</footer>
-
-<script>
-    const editor = document.getElementById('editor');
-    const lineNumbers = document.getElementById('line-numbers');
-
-    function handleInput() {
-        updateLineNumbers();
-        updateStats();
+function updateLineNumbers() {
+    const lines = editor.value.split('\n').length;
+    let lineStr = '';
+    for (let i = 1; i <= lines; i++) {
+        lineStr += i + '<br>';
     }
+    lineNumbers.innerHTML = lineStr;
+}
 
-    function updateLineNumbers() {
-        const lines = editor.value.split('\n').length;
-        let lineStr = '';
-        for (let i = 1; i <= lines; i++) {
-            lineStr += i + '<br>';
-        }
-        lineNumbers.innerHTML = lineStr;
-    }
+function syncScroll() {
+    lineNumbers.scrollTop = editor.scrollTop;
+}
 
-    function syncScroll() {
-        lineNumbers.scrollTop = editor.scrollTop;
-    }
+function updateStats() {
+    const text = editor.value;
+    const cursorPos = editor.selectionStart;
+    const textBefore = text.substring(0, cursorPos);
+    const lines = textBefore.split('\n');
+    
+    document.getElementById('charCount').innerText = `Chars: ${text.length}`;
+    document.getElementById('lnCol').innerText = `Ln ${lines.length}, Col ${lines[lines.length - 1].length + 1}`;
+}
 
-    function updateStats() {
-        const text = editor.value;
-        const cursorPos = editor.selectionStart;
-        const textBefore = text.substring(0, cursorPos);
-        const lines = textBefore.split('\n');
+// --- File System API Implementation ---
+
+async function loadFile() {
+    try {
+        // Open file picker
+        [fileHandle] = await window.showOpenFilePicker({
+            types: [{
+                description: 'Text Files',
+                accept: { 'text/plain': ['.txt', '.md', '.js', '.html', '.css'] }
+            }],
+            multiple: false
+        });
+
+        const file = await fileHandle.getFile();
+        editor.value = await file.text();
         
-        document.getElementById('charCount').innerText = `Chars: ${text.length}`;
-        document.getElementById('lnCol').innerText = `Ln ${lines.length}, Col ${lines[lines.length - 1].length + 1}`;
+        handleInput();
+        document.title = `${file.name} - Modern Web Notepad`;
+    } catch (err) {
+        console.error("Open cancelled or failed:", err);
     }
+}
 
-    // --- Core Logic ---
-    async function loadFile() {
-        try {
-            const [handle] = await window.showOpenFilePicker();
-            const file = await handle.getFile();
-            editor.value = await file.text();
-            handleInput();
-        } catch (e) {}
+async function saveFile() {
+    try {
+        // If we don't have a handle yet, it's a "Save As"
+        if (!fileHandle) {
+            fileHandle = await window.showSaveFilePicker({
+                suggestedName: 'note.txt',
+                types: [{
+                    description: 'Text File',
+                    accept: { 'text/plain': ['.txt'] }
+                }]
+            });
+        }
+
+        // Create a writable stream to the file
+        const writable = await fileHandle.createWritable();
+        await writable.write(editor.value);
+        await writable.close();
+        
+        const file = await fileHandle.getFile();
+        document.title = `${file.name} - Saved`;
+    } catch (err) {
+        console.error("Save cancelled or failed:", err);
     }
+}
 
-    async function saveFile() {
-        try {
-            const handle = await window.showSaveFilePicker({ suggestedName: 'note.txt' });
-            const writable = await handle.createWritable();
-            await writable.write(editor.value);
-            await writable.close();
-        } catch (e) {}
-    }
-
-    function findAndReplace() {
-        const f = document.getElementById('findInput').value;
-        const r = document.getElementById('replaceInput').value;
-        if (!f) return;
-        editor.value = editor.value.split(f).join(r);
+function newFile() {
+    if (confirm("Discard unsaved changes and create a new document?")) {
+        editor.value = "";
+        fileHandle = null;
+        document.title = "Modern Web Notepad";
         handleInput();
     }
+}
 
-    function newFile() {
-        if(confirm("Create new document?")) {
-            editor.value = "";
-            handleInput();
-        }
-    }
+function findAndReplace() {
+    const f = document.getElementById('findInput').value;
+    const r = document.getElementById('replaceInput').value;
+    if (!f) return;
+    
+    // Using a regex with 'g' flag for global replacement
+    const escapedF = f.replace(/[.*+?^${}()|[\]\s]/g, '\\$&');
+    editor.value = editor.value.replace(new RegExp(escapedF, 'g'), r);
+    handleInput();
+}
 
-    // Initialize
-    updateLineNumbers();
-</script>
-</body>
-</html>
+// Initialize
+updateLineNumbers();
