@@ -1,102 +1,305 @@
-const editor = document.getElementById('editor');
-const lineNumbers = document.getElementById('line-numbers');
-let fileHandle = null; // Track the current file for "Save" vs "Save As"
-
-function handleInput() {
-    updateLineNumbers();
-    updateStats();
-}
-
-function updateLineNumbers() {
-    const lines = editor.value.split('\n').length;
-    let lineStr = '';
-    for (let i = 1; i <= lines; i++) {
-        lineStr += i + '<br>';
-    }
-    lineNumbers.innerHTML = lineStr;
-}
-
-function syncScroll() {
-    lineNumbers.scrollTop = editor.scrollTop;
-}
-
-function updateStats() {
-    const text = editor.value;
-    const cursorPos = editor.selectionStart;
-    const textBefore = text.substring(0, cursorPos);
-    const lines = textBefore.split('\n');
-    
-    document.getElementById('charCount').innerText = `Chars: ${text.length}`;
-    document.getElementById('lnCol').innerText = `Ln ${lines.length}, Col ${lines[lines.length - 1].length + 1}`;
-}
-
-// --- File System API Implementation ---
-
-async function loadFile() {
-    try {
-        // Open file picker
-        [fileHandle] = await window.showOpenFilePicker({
-            types: [{
-                description: 'Text Files',
-                accept: { 'text/plain': ['.txt', '.md', '.js', '.html', '.css'] }
-            }],
-            multiple: false
-        });
-
-        const file = await fileHandle.getFile();
-        editor.value = await file.text();
-        
-        handleInput();
-        document.title = `${file.name} - Modern Web Notepad`;
-    } catch (err) {
-        console.error("Open cancelled or failed:", err);
-    }
-}
-
-async function saveFile() {
-    try {
-        // If we don't have a handle yet, it's a "Save As"
-        if (!fileHandle) {
-            fileHandle = await window.showSaveFilePicker({
-                suggestedName: 'note.txt',
-                types: [{
-                    description: 'Text File',
-                    accept: { 'text/plain': ['.txt'] }
-                }]
-            });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Web Notepad</title>
+    <style>
+        :root {
+            --brand: #26224E;
+            --brand-light: #3a3475;
+            --bg: #f8f9fa;
+            --text-main: #2d3436;
         }
 
-        // Create a writable stream to the file
-        const writable = await fileHandle.createWritable();
-        await writable.write(editor.value);
-        await writable.close();
-        
-        const file = await fileHandle.getFile();
-        document.title = `${file.name} - Saved`;
-    } catch (err) {
-        console.error("Save cancelled or failed:", err);
-    }
-}
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
-function newFile() {
-    if (confirm("Discard unsaved changes and create a new document?")) {
-        editor.value = "";
-        fileHandle = null;
-        document.title = "Modern Web Notepad";
+        body {
+            background-color: var(--bg);
+            font-family: 'Inter', -apple-system, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            background-color: var(--brand);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10;
+        }
+
+        .btn-group { display: flex; gap: 8px; }
+
+        button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        button.primary { background: #4e44af; border: none; }
+
+        .search-container {
+            display: flex;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 4px;
+            border-radius: 8px;
+            gap: 5px;
+        }
+
+        input {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            padding: 6px 12px;
+            color: white;
+            font-size: 13px;
+            outline: none;
+        }
+
+        input::placeholder { color: rgba(255,255,255,0.5); }
+
+        .container {
+            flex: 1;
+            display: flex;
+            position: relative;
+            background: white;
+            overflow: hidden;
+        }
+
+        #line-numbers {
+            width: 45px;
+            background: #f1f3f5;
+            color: #adb5bd;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 14px;
+            padding: 15px 5px;
+            text-align: right;
+            user-select: none;
+            overflow: hidden;
+            line-height: 1.6;
+        }
+
+        /* Highlighting Logic Styles */
+        .editor-wrapper {
+            position: relative;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        #highlights, #editor {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 15px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            border: none;
+            outline: none;
+        }
+
+        #editor {
+            background: transparent;
+            color: var(--text-main);
+            z-index: 2;
+            resize: none;
+        }
+
+        #highlights {
+            color: transparent;
+            z-index: 1;
+            overflow-y: auto;
+            pointer-events: none; /* Let clicks pass through to textarea */
+        }
+
+        mark {
+            background-color: #ffd33d;
+            color: transparent;
+            border-radius: 2px;
+        }
+
+        footer {
+            background: var(--brand);
+            color: rgba(255,255,255,0.7);
+            font-size: 11px;
+            padding: 6px 20px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 25px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        @media print {
+            header, footer, #line-numbers, #highlights { display: none !important; }
+            #editor { position: static; color: black; background: white; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="btn-group">
+        <button onclick="newFile()">New</button>
+        <button onclick="loadFile()">Open</button>
+        <button onclick="saveFile()" class="primary">Save</button>
+        <button onclick="window.print()">Print</button>
+    </div>
+
+    <div class="search-container">
+        <input type="text" id="findInput" placeholder="Find word..." oninput="applySearchHighlight()">
+        <input type="text" id="replaceInput" placeholder="Replace with...">
+        <button onclick="findAndReplace()">Replace All</button>
+    </div>
+</header>
+
+<div class="container">
+    <div id="line-numbers">1</div>
+    <div class="editor-wrapper">
+        <div id="highlights"></div>
+        <textarea id="editor" spellcheck="false" 
+            oninput="handleInput()" 
+            onscroll="syncScroll()" 
+            onclick="updateStats()" 
+            onkeyup="updateStats()"></textarea>
+    </div>
+</div>
+
+<footer>
+    <span id="charCount">Chars: 0</span>
+    <span id="lnCol">Ln 1, Col 1</span>
+</footer>
+
+<script>
+    const editor = document.getElementById('editor');
+    const lineNumbers = document.getElementById('line-numbers');
+    const highlightsLayer = document.getElementById('highlights');
+    let fileHandle = null;
+
+    function handleInput() {
+        updateLineNumbers();
+        updateStats();
+        applySearchHighlight();
+    }
+
+    function updateLineNumbers() {
+        const lines = editor.value.split('\n').length;
+        let lineStr = '';
+        for (let i = 1; i <= lines; i++) {
+            lineStr += i + '<br>';
+        }
+        lineNumbers.innerHTML = lineStr;
+    }
+
+    function syncScroll() {
+        lineNumbers.scrollTop = editor.scrollTop;
+        highlightsLayer.scrollTop = editor.scrollTop;
+    }
+
+    function updateStats() {
+        const text = editor.value;
+        const cursorPos = editor.selectionStart;
+        const textBefore = text.substring(0, cursorPos);
+        const lines = textBefore.split('\n');
+        
+        document.getElementById('charCount').innerText = `Chars: ${text.length}`;
+        document.getElementById('lnCol').innerText = `Ln ${lines.length}, Col ${lines[lines.length - 1].length + 1}`;
+    }
+
+    // --- Search Highlighting Logic ---
+    function applySearchHighlight() {
+        const searchTerm = document.getElementById('findInput').value;
+        let text = editor.value;
+
+        if (searchTerm) {
+            // Escape special characters for Regex
+            const escaped = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(${escaped})`, 'gi');
+            // Wrap matches in <mark> tags
+            text = text.replace(regex, '<mark>$1</mark>');
+        }
+        
+        // Ensure newlines and spaces are preserved for visual alignment
+        highlightsLayer.innerHTML = text.replace(/\n/g, '<br>') + (text.endsWith('\n') ? '<br>&nbsp;' : '');
+    }
+
+    // --- File System Access API ---
+    async function loadFile() {
+        try {
+            [fileHandle] = await window.showOpenFilePicker({
+                types: [{
+                    description: 'Text Files',
+                    accept: { 'text/plain': ['.txt', '.md', '.js', '.html', '.css'] }
+                }]
+            });
+            const file = await fileHandle.getFile();
+            editor.value = await file.text();
+            document.title = file.name;
+            handleInput();
+        } catch (e) {}
+    }
+
+    async function saveFile() {
+        try {
+            if (!fileHandle) {
+                fileHandle = await window.showSaveFilePicker({
+                    suggestedName: 'note.txt'
+                });
+            }
+            const writable = await fileHandle.createWritable();
+            await writable.write(editor.value);
+            await writable.close();
+            const file = await fileHandle.getFile();
+            document.title = file.name;
+        } catch (e) {}
+    }
+
+    function findAndReplace() {
+        const f = document.getElementById('findInput').value;
+        const r = document.getElementById('replaceInput').value;
+        if (!f) return;
+        
+        const escapedF = f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        editor.value = editor.value.replace(new RegExp(escapedF, 'g'), r);
         handleInput();
     }
-}
 
-function findAndReplace() {
-    const f = document.getElementById('findInput').value;
-    const r = document.getElementById('replaceInput').value;
-    if (!f) return;
-    
-    // Using a regex with 'g' flag for global replacement
-    const escapedF = f.replace(/[.*+?^${}()|[\]\s]/g, '\\$&');
-    editor.value = editor.value.replace(new RegExp(escapedF, 'g'), r);
-    handleInput();
-}
+    function newFile() {
+        if(confirm("Create new document? Unsaved changes will be lost.")) {
+            editor.value = "";
+            fileHandle = null;
+            document.title = "Modern Web Notepad";
+            handleInput();
+        }
+    }
 
-// Initialize
-updateLineNumbers();
+    // Initial call
+    updateLineNumbers();
+</script>
+</body>
+</html>
