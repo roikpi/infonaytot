@@ -99,7 +99,6 @@
             line-height: 1.6;
         }
 
-        /* Highlighting Logic Styles */
         .editor-wrapper {
             position: relative;
             flex: 1;
@@ -134,7 +133,7 @@
             color: transparent;
             z-index: 1;
             overflow-y: auto;
-            pointer-events: none; /* Let clicks pass through to textarea */
+            pointer-events: none;
         }
 
         mark {
@@ -231,24 +230,19 @@
         document.getElementById('lnCol').innerText = `Ln ${lines.length}, Col ${lines[lines.length - 1].length + 1}`;
     }
 
-    // --- Search Highlighting Logic ---
     function applySearchHighlight() {
         const searchTerm = document.getElementById('findInput').value;
         let text = editor.value;
 
         if (searchTerm) {
-            // Escape special characters for Regex
             const escaped = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const regex = new RegExp(`(${escaped})`, 'gi');
-            // Wrap matches in <mark> tags
             text = text.replace(regex, '<mark>$1</mark>');
         }
         
-        // Ensure newlines and spaces are preserved for visual alignment
         highlightsLayer.innerHTML = text.replace(/\n/g, '<br>') + (text.endsWith('\n') ? '<br>&nbsp;' : '');
     }
 
-    // --- File System Access API ---
     async function loadFile() {
         try {
             [fileHandle] = await window.showOpenFilePicker({
@@ -298,7 +292,6 @@
         }
     }
 
-    // Initial call
     updateLineNumbers();
 </script>
 </body>
