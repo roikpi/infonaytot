@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Moderni Muistio</title>
+    <title>Nimetön</title>
     <style>
         :root {
             --brand: #26224E;
@@ -35,7 +35,14 @@
             position: relative;
         }
 
-        .btn-group { display: flex; gap: 8px; z-index: 2; }
+        .btn-group { display: flex; gap: 8px; z-index: 2; align-items: center; }
+
+        .divider {
+            width: 1px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.2);
+            margin: 0 4px;
+        }
 
         .title-container {
             position: absolute;
@@ -70,6 +77,7 @@
             padding: 3px 8px;
             font-size: 15px;
             width: 200px;
+            outline: none;
         }
 
         .right-controls {
@@ -94,13 +102,22 @@
             gap: 5px;
         }
 
-        button:hover {
+        button:hover:not(:disabled) {
             background: rgba(255, 255, 255, 0.2);
             transform: translateY(-1px);
         }
 
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
         button.primary { background: #4e44af; border: none; }
         
+        .icon-btn {
+            padding: 8px 10px;
+        }
+
         #btnLang {
             font-weight: bold;
             background: rgba(255, 255, 255, 0.2);
@@ -219,10 +236,19 @@
         <button id="btnSave" onclick="saveFile()" class="primary">Tallenna</button>
         <button id="btnPrint" onclick="window.print()">Tulosta</button>
         <button id="btnToggleLines" onclick="toggleLineNumbers()">Näytä rivinumerot</button>
+        
+        <div class="divider"></div>
+        
+        <button id="btnUndo" class="icon-btn" onclick="undo()" title="Undo (Ctrl+Z)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
+        </button>
+        <button id="btnRedo" class="icon-btn" onclick="redo()" title="Redo (Ctrl+Y)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg>
+        </button>
     </div>
 
     <div class="title-container">
-        <span id="fileNameDisplay" ondblclick="enableNameEdit()">Moderni Muistio</span>
+        <span id="fileNameDisplay" ondblclick="enableNameEdit()">Nimetön</span>
         <input type="text" id="fileNameInput" onblur="disableNameEdit()" onkeydown="handleNameEnter(event)">
     </div>
 
@@ -259,12 +285,16 @@
     const highlightsLayer = document.getElementById('highlights');
     let fileHandle = null;
 
-    // State
+    // UI Configuration & Application States
     let currentLang = 'fi';
     let lineNumbersVisible = false;
     let isCustomName = false;
+    let customFileName = "";
 
-    // Translations Dictionary
+    // History Storage Structures for Custom Undo/Redo Engine
+    let historyStack = [''];
+    let historyIndex = 0;
+
     const dict = {
         fi: {
             new: "Uusi",
@@ -281,7 +311,9 @@
             confirmNew: "Luodaanko uusi asiakirja? Tallentamattomat muutokset menetetään.",
             showLines: "Näytä rivinumerot",
             hideLines: "Piilota rivinumerot",
-            title: "Moderni Muistio"
+            untitled: "Nimetön",
+            undoTitle: "Kumoa (Ctrl+Z)",
+            redoTitle: "Tee uudelleen (Ctrl+Y)"
         },
         en: {
             new: "New",
@@ -298,7 +330,9 @@
             confirmNew: "Create new document? Unsaved changes will be lost.",
             showLines: "Show line numbers",
             hideLines: "Hide line numbers",
-            title: "Modern Web Notepad"
+            untitled: "Untitled",
+            undoTitle: "Undo (Ctrl+Z)",
+            redoTitle: "Redo (Ctrl+Y)"
         }
     };
 
@@ -331,14 +365,22 @@
         const t = dict[currentLang];
 
         if (newName !== "") {
-            display.innerText = newName;
-            document.title = newName;
+            customFileName = newName;
             isCustomName = true;
+            display.innerText = customFileName;
+            document.title = customFileName;
         } else {
-            // Revert to default translated title if left blank
-            display.innerText = t.title;
-            document.title = t.title;
-            isCustomName = false;
+            // Reverted back to default template configurations if cleared out completely
+            if (!fileHandle) {
+                isCustomName = false;
+                customFileName = "";
+                display.innerText = t.untitled;
+                document.title = t.untitled;
+            } else {
+                // If it was already linked to an existing filesystem object, keep the previous metadata name intact
+                display.innerText = customFileName;
+                document.title = customFileName;
+            }
         }
 
         input.style.display = 'none';
@@ -351,20 +393,17 @@
         }
     }
 
-    function setFileName(name) {
-        document.title = name;
-        document.getElementById('fileNameDisplay').innerText = name;
-        isCustomName = true;
-    }
-
     function updateUI() {
         const t = dict[currentLang];
         document.documentElement.lang = currentLang;
 
-        // Only translate title if the user hasn't explicitly set a custom file name
-        if (!isCustomName) {
-            document.title = t.title;
-            document.getElementById('fileNameDisplay').innerText = t.title;
+        // Title text rendering logic depending on modifications status
+        if (isCustomName) {
+            document.title = customFileName;
+            document.getElementById('fileNameDisplay').innerText = customFileName;
+        } else {
+            document.title = t.untitled;
+            document.getElementById('fileNameDisplay').innerText = t.untitled;
         }
 
         document.getElementById('btnNew').innerText = t.new;
@@ -376,9 +415,12 @@
         document.getElementById('findInput').placeholder = t.find;
         document.getElementById('replaceInput').placeholder = t.replace;
         document.getElementById('btnReplaceAll').innerText = t.replaceAll;
-        
         document.getElementById('btnLang').innerText = t.langBtn;
         
+        document.getElementById('btnUndo').title = t.undoTitle;
+        document.getElementById('btnRedo').title = t.redoTitle;
+
+        updateUndoRedoButtons();
         updateStats();
     }
 
@@ -386,6 +428,47 @@
         updateLineNumbers();
         updateStats();
         applySearchHighlight();
+        saveHistoryState();
+    }
+
+    // Custom History Management
+    function saveHistoryState() {
+        const currentContent = editor.value;
+        if (currentContent === historyStack[historyIndex]) return;
+
+        // Truncate any elements positioned past our index marker if modifications occur post-undo sequences
+        historyStack = historyStack.slice(0, historyIndex + 1);
+        historyStack.push(currentContent);
+        historyIndex++;
+        
+        updateUndoRedoButtons();
+    }
+
+    function undo() {
+        if (historyIndex > 0) {
+            historyIndex--;
+            editor.value = historyStack[historyIndex];
+            updateLineNumbers();
+            updateStats();
+            applySearchHighlight();
+            updateUndoRedoButtons();
+        }
+    }
+
+    function redo() {
+        if (historyIndex < historyStack.length - 1) {
+            historyIndex++;
+            editor.value = historyStack[historyIndex];
+            updateLineNumbers();
+            updateStats();
+            applySearchHighlight();
+            updateUndoRedoButtons();
+        }
+    }
+
+    function updateUndoRedoButtons() {
+        document.getElementById('btnUndo').disabled = (historyIndex === 0);
+        document.getElementById('btnRedo').disabled = (historyIndex === historyStack.length - 1);
     }
 
     function updateLineNumbers() {
@@ -436,7 +519,15 @@
             });
             const file = await fileHandle.getFile();
             editor.value = await file.text();
-            setFileName(file.name);
+            
+            customFileName = file.name;
+            isCustomName = true;
+            
+            // Wipe history stacks clean to initialize snapshot baselines for loaded text items
+            historyStack = [editor.value];
+            historyIndex = 0;
+            
+            updateUI();
             handleInput();
         } catch (e) {}
     }
@@ -444,15 +535,20 @@
     async function saveFile() {
         try {
             if (!fileHandle) {
+                // Use custom file designation string as standard suggested defaults if configured
+                const suggested = isCustomName ? customFileName : (currentLang === 'fi' ? 'Nimetön.txt' : 'Untitled.txt');
                 fileHandle = await window.showSaveFilePicker({
-                    suggestedName: 'note.txt'
+                    suggestedName: suggested
                 });
             }
             const writable = await fileHandle.createWritable();
             await writable.write(editor.value);
             await writable.close();
             const file = await fileHandle.getFile();
-            setFileName(file.name);
+            
+            customFileName = file.name;
+            isCustomName = true;
+            updateUI();
         } catch (e) {}
     }
 
@@ -471,12 +567,38 @@
             editor.value = "";
             fileHandle = null;
             isCustomName = false;
-            updateUI(); // Resets title to default translated version
+            customFileName = "";
+            
+            historyStack = [''];
+            historyIndex = 0;
+            
+            updateUI();
             handleInput();
         }
     }
 
-    // Initialize UI on load
+    // Intercept Keyboard Hotkeys
+    window.addEventListener('keydown', function(e) {
+        // Only trigger custom undo/redo configurations if focusing inside text content area
+        if (document.activeElement === editor) {
+            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+            const modifier = isMac ? e.metaKey : e.ctrlKey;
+
+            if (modifier && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    redo(); // Ctrl+Shift+Z alternative mapping mechanism
+                } else {
+                    undo(); // Standard Ctrl+Z logic sequence
+                }
+            } else if (modifier && e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                redo(); // Standard Ctrl+Y action sequence
+            }
+        }
+    });
+
+    // Run Initializations
     updateLineNumbers();
     updateUI();
 </script>
