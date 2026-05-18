@@ -32,14 +32,51 @@
             color: white;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             z-index: 10;
+            position: relative;
         }
 
-        .btn-group { display: flex; gap: 8px; }
+        .btn-group { display: flex; gap: 8px; z-index: 2; }
+
+        .title-container {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            font-weight: 600;
+            font-size: 15px;
+            z-index: 1;
+            white-space: nowrap;
+        }
+
+        #fileNameDisplay {
+            cursor: text;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        #fileNameDisplay:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #fileNameInput {
+            display: none;
+            text-align: center;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            border-radius: 4px;
+            padding: 3px 8px;
+            font-size: 15px;
+            width: 200px;
+        }
 
         .right-controls {
             display: flex;
             gap: 15px;
             align-items: center;
+            z-index: 2;
         }
 
         button {
@@ -78,7 +115,7 @@
             gap: 5px;
         }
 
-        input {
+        input[type="text"]:not(#fileNameInput) {
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 4px;
@@ -109,7 +146,7 @@
             user-select: none;
             overflow: hidden;
             line-height: 1.6;
-            display: none; /* Hidden by default */
+            display: none;
         }
 
         .editor-wrapper {
@@ -184,6 +221,11 @@
         <button id="btnToggleLines" onclick="toggleLineNumbers()">Näytä rivinumerot</button>
     </div>
 
+    <div class="title-container">
+        <span id="fileNameDisplay" ondblclick="enableNameEdit()">Moderni Muistio</span>
+        <input type="text" id="fileNameInput" onblur="disableNameEdit()" onkeydown="handleNameEnter(event)">
+    </div>
+
     <div class="right-controls">
         <div class="search-container">
             <input type="text" id="findInput" placeholder="Etsi sana..." oninput="applySearchHighlight()">
@@ -220,6 +262,7 @@
     // State
     let currentLang = 'fi';
     let lineNumbersVisible = false;
+    let isCustomName = false;
 
     // Translations Dictionary
     const dict = {
@@ -270,11 +313,59 @@
         updateUI();
     }
 
+    function enableNameEdit() {
+        const display = document.getElementById('fileNameDisplay');
+        const input = document.getElementById('fileNameInput');
+        
+        input.value = display.innerText;
+        display.style.display = 'none';
+        input.style.display = 'inline-block';
+        input.focus();
+        input.select();
+    }
+
+    function disableNameEdit() {
+        const display = document.getElementById('fileNameDisplay');
+        const input = document.getElementById('fileNameInput');
+        const newName = input.value.trim();
+        const t = dict[currentLang];
+
+        if (newName !== "") {
+            display.innerText = newName;
+            document.title = newName;
+            isCustomName = true;
+        } else {
+            // Revert to default translated title if left blank
+            display.innerText = t.title;
+            document.title = t.title;
+            isCustomName = false;
+        }
+
+        input.style.display = 'none';
+        display.style.display = 'inline-block';
+    }
+
+    function handleNameEnter(e) {
+        if (e.key === 'Enter') {
+            disableNameEdit();
+        }
+    }
+
+    function setFileName(name) {
+        document.title = name;
+        document.getElementById('fileNameDisplay').innerText = name;
+        isCustomName = true;
+    }
+
     function updateUI() {
         const t = dict[currentLang];
         document.documentElement.lang = currentLang;
 
-        if (!fileHandle) document.title = t.title;
+        // Only translate title if the user hasn't explicitly set a custom file name
+        if (!isCustomName) {
+            document.title = t.title;
+            document.getElementById('fileNameDisplay').innerText = t.title;
+        }
 
         document.getElementById('btnNew').innerText = t.new;
         document.getElementById('btnOpen').innerText = t.open;
@@ -345,7 +436,7 @@
             });
             const file = await fileHandle.getFile();
             editor.value = await file.text();
-            document.title = file.name;
+            setFileName(file.name);
             handleInput();
         } catch (e) {}
     }
@@ -361,7 +452,7 @@
             await writable.write(editor.value);
             await writable.close();
             const file = await fileHandle.getFile();
-            document.title = file.name;
+            setFileName(file.name);
         } catch (e) {}
     }
 
@@ -379,7 +470,8 @@
         if(confirm(dict[currentLang].confirmNew)) {
             editor.value = "";
             fileHandle = null;
-            document.title = dict[currentLang].title;
+            isCustomName = false;
+            updateUI(); // Resets title to default translated version
             handleInput();
         }
     }
