@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern Web Notepad</title>
+    <title>Moderni Muistio</title>
     <style>
         :root {
             --brand: #26224E;
@@ -36,6 +36,12 @@
 
         .btn-group { display: flex; gap: 8px; }
 
+        .right-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
         button {
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -57,6 +63,12 @@
         }
 
         button.primary { background: #4e44af; border: none; }
+        
+        #btnLang {
+            font-weight: bold;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 12px;
+        }
 
         .search-container {
             display: flex;
@@ -97,6 +109,7 @@
             user-select: none;
             overflow: hidden;
             line-height: 1.6;
+            display: none; /* Hidden by default */
         }
 
         .editor-wrapper {
@@ -164,16 +177,20 @@
 
 <header>
     <div class="btn-group">
-        <button onclick="newFile()">New</button>
-        <button onclick="loadFile()">Open</button>
-        <button onclick="saveFile()" class="primary">Save</button>
-        <button onclick="window.print()">Print</button>
+        <button id="btnNew" onclick="newFile()">Uusi</button>
+        <button id="btnOpen" onclick="loadFile()">Avaa</button>
+        <button id="btnSave" onclick="saveFile()" class="primary">Tallenna</button>
+        <button id="btnPrint" onclick="window.print()">Tulosta</button>
+        <button id="btnToggleLines" onclick="toggleLineNumbers()">Näytä rivinumerot</button>
     </div>
 
-    <div class="search-container">
-        <input type="text" id="findInput" placeholder="Find word..." oninput="applySearchHighlight()">
-        <input type="text" id="replaceInput" placeholder="Replace with...">
-        <button onclick="findAndReplace()">Replace All</button>
+    <div class="right-controls">
+        <div class="search-container">
+            <input type="text" id="findInput" placeholder="Etsi sana..." oninput="applySearchHighlight()">
+            <input type="text" id="replaceInput" placeholder="Korvaa sanalla...">
+            <button id="btnReplaceAll" onclick="findAndReplace()">Korvaa kaikki</button>
+        </div>
+        <button id="btnLang" onclick="toggleLanguage()">EN</button>
     </div>
 </header>
 
@@ -190,8 +207,8 @@
 </div>
 
 <footer>
-    <span id="charCount">Chars: 0</span>
-    <span id="lnCol">Ln 1, Col 1</span>
+    <span id="charCount">Merkkejä: 0</span>
+    <span id="lnCol">Rivi 1, Sarake 1</span>
 </footer>
 
 <script>
@@ -199,6 +216,80 @@
     const lineNumbers = document.getElementById('line-numbers');
     const highlightsLayer = document.getElementById('highlights');
     let fileHandle = null;
+
+    // State
+    let currentLang = 'fi';
+    let lineNumbersVisible = false;
+
+    // Translations Dictionary
+    const dict = {
+        fi: {
+            new: "Uusi",
+            open: "Avaa",
+            save: "Tallenna",
+            print: "Tulosta",
+            find: "Etsi sana...",
+            replace: "Korvaa sanalla...",
+            replaceAll: "Korvaa kaikki",
+            chars: "Merkkejä",
+            ln: "Rivi",
+            col: "Sarake",
+            langBtn: "EN", 
+            confirmNew: "Luodaanko uusi asiakirja? Tallentamattomat muutokset menetetään.",
+            showLines: "Näytä rivinumerot",
+            hideLines: "Piilota rivinumerot",
+            title: "Moderni Muistio"
+        },
+        en: {
+            new: "New",
+            open: "Open",
+            save: "Save",
+            print: "Print",
+            find: "Find word...",
+            replace: "Replace with...",
+            replaceAll: "Replace All",
+            chars: "Chars",
+            ln: "Ln",
+            col: "Col",
+            langBtn: "FI", 
+            confirmNew: "Create new document? Unsaved changes will be lost.",
+            showLines: "Show line numbers",
+            hideLines: "Hide line numbers",
+            title: "Modern Web Notepad"
+        }
+    };
+
+    function toggleLanguage() {
+        currentLang = currentLang === 'fi' ? 'en' : 'fi';
+        updateUI();
+    }
+
+    function toggleLineNumbers() {
+        lineNumbersVisible = !lineNumbersVisible;
+        lineNumbers.style.display = lineNumbersVisible ? 'block' : 'none';
+        updateUI();
+    }
+
+    function updateUI() {
+        const t = dict[currentLang];
+        document.documentElement.lang = currentLang;
+
+        if (!fileHandle) document.title = t.title;
+
+        document.getElementById('btnNew').innerText = t.new;
+        document.getElementById('btnOpen').innerText = t.open;
+        document.getElementById('btnSave').innerText = t.save;
+        document.getElementById('btnPrint').innerText = t.print;
+        document.getElementById('btnToggleLines').innerText = lineNumbersVisible ? t.hideLines : t.showLines;
+        
+        document.getElementById('findInput').placeholder = t.find;
+        document.getElementById('replaceInput').placeholder = t.replace;
+        document.getElementById('btnReplaceAll').innerText = t.replaceAll;
+        
+        document.getElementById('btnLang').innerText = t.langBtn;
+        
+        updateStats();
+    }
 
     function handleInput() {
         updateLineNumbers();
@@ -226,8 +317,9 @@
         const textBefore = text.substring(0, cursorPos);
         const lines = textBefore.split('\n');
         
-        document.getElementById('charCount').innerText = `Chars: ${text.length}`;
-        document.getElementById('lnCol').innerText = `Ln ${lines.length}, Col ${lines[lines.length - 1].length + 1}`;
+        const t = dict[currentLang];
+        document.getElementById('charCount').innerText = `${t.chars}: ${text.length}`;
+        document.getElementById('lnCol').innerText = `${t.ln} ${lines.length}, ${t.col} ${lines[lines.length - 1].length + 1}`;
     }
 
     function applySearchHighlight() {
@@ -284,15 +376,17 @@
     }
 
     function newFile() {
-        if(confirm("Create new document? Unsaved changes will be lost.")) {
+        if(confirm(dict[currentLang].confirmNew)) {
             editor.value = "";
             fileHandle = null;
-            document.title = "Modern Web Notepad";
+            document.title = dict[currentLang].title;
             handleInput();
         }
     }
 
+    // Initialize UI on load
     updateLineNumbers();
+    updateUI();
 </script>
 </body>
 </html>
