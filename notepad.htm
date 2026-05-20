@@ -56,7 +56,7 @@
         }
 
         #fileNameDisplay {
-            cursor: text;
+            cursor: pointer; /* Changed to pointer to reflect single-click action */
             padding: 4px 8px;
             border-radius: 4px;
             transition: background 0.2s;
@@ -85,6 +85,8 @@
             gap: 15px;
             align-items: center;
             z-index: 2;
+            flex-shrink: 1;
+            min-width: 0;
         }
 
         button {
@@ -100,6 +102,7 @@
             display: flex;
             align-items: center;
             gap: 5px;
+            white-space: nowrap;
         }
 
         button:hover:not(:disabled) {
@@ -130,6 +133,8 @@
             padding: 4px;
             border-radius: 8px;
             gap: 5px;
+            flex-shrink: 1;
+            min-width: 0;
         }
 
         input[type="text"]:not(#fileNameInput) {
@@ -140,6 +145,9 @@
             color: white;
             font-size: 13px;
             outline: none;
+            width: 140px; /* Base structural width */
+            min-width: 60px; /* Allows graceful shrinking */
+            flex-shrink: 1;
         }
 
         input::placeholder { color: rgba(255,255,255,0.5); }
@@ -221,6 +229,13 @@
             letter-spacing: 0.5px;
         }
 
+        /* Responsive breakpoints for tight horizontal spacing */
+        @media (max-width: 1300px) {
+            #btnToggleLines {
+                display: none !important; /* Hides the row numbers toggle button */
+            }
+        }
+
         @media print {
             header, footer, #line-numbers, #highlights { display: none !important; }
             #editor { position: static; color: black; background: white; }
@@ -248,7 +263,7 @@
     </div>
 
     <div class="title-container">
-        <span id="fileNameDisplay" ondblclick="enableNameEdit()">Nimetön</span>
+        <span id="fileNameDisplay" onclick="enableNameEdit()">Nimetön</span>
         <input type="text" id="fileNameInput" onblur="disableNameEdit()" onkeydown="handleNameEnter(event)">
     </div>
 
@@ -370,14 +385,12 @@
             display.innerText = customFileName;
             document.title = customFileName;
         } else {
-            // Reverted back to default template configurations if cleared out completely
             if (!fileHandle) {
                 isCustomName = false;
                 customFileName = "";
                 display.innerText = t.untitled;
                 document.title = t.untitled;
             } else {
-                // If it was already linked to an existing filesystem object, keep the previous metadata name intact
                 display.innerText = customFileName;
                 document.title = customFileName;
             }
@@ -397,7 +410,6 @@
         const t = dict[currentLang];
         document.documentElement.lang = currentLang;
 
-        // Title text rendering logic depending on modifications status
         if (isCustomName) {
             document.title = customFileName;
             document.getElementById('fileNameDisplay').innerText = customFileName;
@@ -436,7 +448,6 @@
         const currentContent = editor.value;
         if (currentContent === historyStack[historyIndex]) return;
 
-        // Truncate any elements positioned past our index marker if modifications occur post-undo sequences
         historyStack = historyStack.slice(0, historyIndex + 1);
         historyStack.push(currentContent);
         historyIndex++;
@@ -523,7 +534,6 @@
             customFileName = file.name;
             isCustomName = true;
             
-            // Wipe history stacks clean to initialize snapshot baselines for loaded text items
             historyStack = [editor.value];
             historyIndex = 0;
             
@@ -535,7 +545,6 @@
     async function saveFile() {
         try {
             if (!fileHandle) {
-                // Use custom file designation string as standard suggested defaults if configured
                 const suggested = isCustomName ? customFileName : (currentLang === 'fi' ? 'Nimetön.txt' : 'Untitled.txt');
                 fileHandle = await window.showSaveFilePicker({
                     suggestedName: suggested
@@ -577,9 +586,7 @@
         }
     }
 
-    // Intercept Keyboard Hotkeys
     window.addEventListener('keydown', function(e) {
-        // Only trigger custom undo/redo configurations if focusing inside text content area
         if (document.activeElement === editor) {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
             const modifier = isMac ? e.metaKey : e.ctrlKey;
@@ -587,18 +594,17 @@
             if (modifier && e.key.toLowerCase() === 'z') {
                 e.preventDefault();
                 if (e.shiftKey) {
-                    redo(); // Ctrl+Shift+Z alternative mapping mechanism
+                    redo();
                 } else {
-                    undo(); // Standard Ctrl+Z logic sequence
+                    undo();
                 }
             } else if (modifier && e.key.toLowerCase() === 'y') {
                 e.preventDefault();
-                redo(); // Standard Ctrl+Y action sequence
+                redo();
             }
         }
     });
 
-    // Run Initializations
     updateLineNumbers();
     updateUI();
 </script>
