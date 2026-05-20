@@ -239,6 +239,15 @@
         }
 
         @media print {
+            @page {
+    /* Setting margins to 0 removes default headers and footers */
+    margin: 0; 
+  }
+  
+  body {
+    /* Add padding here so your actual content doesn't hug the edge of the paper */
+    padding: 1.5cm; 
+  }
             header, footer, #line-numbers, #highlights { display: none !important; }
             #editor { position: static; color: black; background: white; }
         }
