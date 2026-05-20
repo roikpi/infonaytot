@@ -238,35 +238,54 @@
             }
         }
 
-        @media print {
-           @page {
-    /* This removes the headers and footers */
+       @media print {
+  @page {
+    /* Removes default browser headers and footers */
     margin: 0; 
   }
 
-  html, body {
-    /* Ensures the browser evaluates the document height correctly */
-    height: auto;
-    /* Prevents flex/grid bugs from locking the height */
-    overflow: visible; 
+  /* 1. Reset ALL potential parent containers */
+  html, body, #editor, .any-parent-wrapper {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    display: block !important; /* Forces layout to behave linearly */
   }
 
   body {
-    /* Creates safe zones inside the page so text doesn't hit the physical paper edge */
-    padding-top: 1.5cm;
-    padding-bottom: 1.5cm;
-    padding-left: 1cm;
-    padding-right: 1cm;
+    /* Safe zones for physical paper edges */
+    padding: 1.5cm 1cm;
   }
 
-  /* Force long text elements to behave nicely at page breaks */
-  p, h1, h2, h3, li {
-    page-break-inside: avoid; /* Legacy support */
-    break-inside: avoid;      /* Modern standard */
+  /* 2. Target the editor specifically */
+  #editor { 
+    position: static !important; 
+    color: #000000 !important; 
+    background: #ffffff !important;
+    width: 100% !important;
+    max-height: none !important; /* Prevents screen-specific height caps */
   }
-            header, footer, #line-numbers, #highlights { display: none !important; }
-            #editor { position: static; color: black; background: white; }
-        }
+
+  /* 3. Handle page breaks for text elements */
+  p, li {
+    page-break-inside: avoid; /* Legacy */
+    break-inside: avoid;      /* Modern */
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    page-break-after: avoid;  /* Prevents headers from being orphaned at the bottom */
+    break-after: avoid;
+  }
+
+  /* Hide unnecessary UI elements */
+  header, footer, #line-numbers, #highlights { 
+    display: none !important; 
+  }
+}
     </style>
 </head>
 <body>
