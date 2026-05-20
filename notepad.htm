@@ -239,14 +239,30 @@
         }
 
         @media print {
-            @page {
-    /* Setting margins to 0 removes default headers and footers */
+           @page {
+    /* This removes the headers and footers */
     margin: 0; 
   }
-  
+
+  html, body {
+    /* Ensures the browser evaluates the document height correctly */
+    height: auto;
+    /* Prevents flex/grid bugs from locking the height */
+    overflow: visible; 
+  }
+
   body {
-    /* Add padding here so your actual content doesn't hug the edge of the paper */
-    padding: 1.5cm; 
+    /* Creates safe zones inside the page so text doesn't hit the physical paper edge */
+    padding-top: 1.5cm;
+    padding-bottom: 1.5cm;
+    padding-left: 1cm;
+    padding-right: 1cm;
+  }
+
+  /* Force long text elements to behave nicely at page breaks */
+  p, h1, h2, h3, li {
+    page-break-inside: avoid; /* Legacy support */
+    break-inside: avoid;      /* Modern standard */
   }
             header, footer, #line-numbers, #highlights { display: none !important; }
             #editor { position: static; color: black; background: white; }
