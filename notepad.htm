@@ -231,6 +231,16 @@
             letter-spacing: 0.5px;
         }
 
+        /* Hide the print span during normal use */
+        #print_content {
+            display: none;
+            white-space: pre-wrap;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 14px;
+            color: black;
+            padding: 20px;
+        }
+
         /* Responsive breakpoints for tight horizontal spacing */
         @media (max-width: 1300px) {
             #btnToggleLines {
@@ -239,19 +249,32 @@
         }
 
         @media print {
-            header, footer, #line-numbers, #highlights { display: none !important; }
-            #editor { position: static; color: black; background: white;overflow: auto;height: max-content;}
+            body > * { 
+                display: none !important; 
+            }
+            
+            body > #print_content { 
+                display: block !important; 
+            }
+
+            body {
+                background: white;
+                height: auto;
+                overflow: visible;
+            }
         }
     </style>
 </head>
 <body>
+
+<span id="print_content"></span>
 
 <header>
     <div class="btn-group">
         <button id="btnNew" onclick="newFile()">Uusi</button>
         <button id="btnOpen" onclick="loadFile()">Avaa</button>
         <button id="btnSave" onclick="saveFile()" class="primary">Tallenna</button>
-        <button id="btnPrint" onclick="window.print()">Tulosta</button>
+        <button id="btnPrint" onclick="customPrint()">Tulosta</button>
         <button id="btnToggleLines" onclick="toggleLineNumbers()">Näytä rivinumerot</button>
         
         <div class="divider"></div>
@@ -520,6 +543,12 @@
         }
         
         highlightsLayer.innerHTML = text.replace(/\n/g, '<br>') + (text.endsWith('\n') ? '<br>&nbsp;' : '');
+    }
+
+    function customPrint() {
+        const printContent = document.getElementById('print_content');
+        printContent.innerText = editor.value;
+        window.print();
     }
 
     async function loadFile() {
