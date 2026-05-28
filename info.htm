@@ -3,118 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wikipedia Data Fetcher</title>
+    <title>Custom Table Extractor</title>
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f7f6;
-            margin: 0;
-            padding: 40px 20px;
-            display: flex;
-            justify-content: center;
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
         }
-        .container {
-            background: #ffffff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-            width: 100%;
-            max-width: 600px;
+        .controls {
+            margin-bottom: 20px;
         }
-        h2 { color: #333; margin-top: 0; }
-        .search-box {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 25px;
-        }
-        input {
-            flex: 1;
-            padding: 12px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 16px;
+        input[type="text"] {
+            width: 400px;
+            padding: 8px;
+            font-size: 14px;
         }
         button {
-            padding: 12px 20px;
-            background-color: #3498db;
+            padding: 8px 15px;
+            font-size: 14px;
+            cursor: pointer;
+            background-color: #007BFF;
             color: white;
             border: none;
             border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
         }
-        button:hover { background-color: #2980b9; }
-        #result {
+        button:hover {
+            background-color: #0056b3;
+        }
+        /* Styling for your custom viewed table */
+        .custom-table {
+            width: 100%;
+            border-collapse: collapse;
             margin-top: 20px;
-            padding: 20px;
-            border-left: 4px solid #3498db;
-            background: #fdfdfd;
-            display: none;
+            background-color: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
-        #title { margin-top: 0; color: #2c3e50; }
-        #extract { line-height: 1.6; color: #555; }
-        .error { color: #e74c3c; font-weight: bold; }
+        .custom-table th, .custom-table td {
+            border: 1px solid #dddddd;
+            text-align: left;
+            padding: 12px;
+        }
+        .custom-table th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .custom-table tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Dynamic Wikipedia Fetcher</h2>
-    <div class="search-box">
-        <input type="text" id="searchQuery" placeholder="Type a topic (e.g., Quantum Mechanics, Coffee)...">
-        <button onclick="fetchWikiData()">Fetch & Parse</button>
+    <h2>External Table Extractor</h2>
+    
+    <div class="controls">
+        <input type="text" id="targetUrl" placeholder="https://arkkitehtuuripankki.onqpr.com/QPR/Portal/QPR.Isapi.dll?PGPLUGIN&*putab&FMT=p&LAN=en%2c1&skin=portal&TPL=customhierarchytreeview.tpl&H=customhierarchy&EHID=204759840&R=3_0_743041689_204759840&MODELID=743041689&RID=267347210999453924" value="">
+        <button onclick="fetchAndExtractTable()">Extract Table</button>
     </div>
 
-    <div id="result">
-        <h3 id="title"></h3>
-        <p id="extract"></p>
-    </div>
-</div>
+    <div id="errorMessage" class="error"></div>
+    <div id="tableContainer"></div>
 
-<script>
-    async function fetchWikiData() {
-        const query = document.getElementById('searchQuery').value.trim();
-        const resultDiv = document.getElementById('result');
-        const titleEl = document.getElementById('title');
-        const extractEl = document.getElementById('extract');
-
-        if (!query) {
-            alert('Please enter a search topic.');
-            return;
-        }
-
-        // Wikipedia's official, CORS-enabled REST API endpoint for page summaries
-        const apiUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`;
-
-        try {
-            // 1. GET data from the external website
-            const response = await fetch(apiUrl);
+    <script>
+        async function fetchAndExtractTable() {
+            const url = document.getElementById('targetUrl').value.trim();
+            const container = document.getElementById('tableContainer');
+            const errorDiv = document.getElementById('errorMessage');
             
-            if (!response.ok) {
-                throw new Error('Topic not found or API error.');
+            // Reset states
+            container.innerHTML = "Loading and parsing data...";
+            errorDiv.textContent = "";
+
+            if (!url) {
+                errorDiv.textContent = "Please enter a valid URL.";
+                container.innerHTML = "";
+                return;
             }
 
-            // 2. Parse the incoming JSON data
-            const data = await response.json();
+            try {
+                // Using a public CORS proxy to fetch the HTML data bypass restrictions
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+                
+                const response = await fetch(proxyUrl);
+                if (!response.ok) throw new Error("Failed to fetch the target website.");
+                
+                const htmlText = await response.text();
 
-            // 3. Represent the data back into the HTML DOM
-            titleEl.textContent = data.title;
-            extractEl.textContent = data.extract;
-            
-            // Remove error styling if a previous attempt failed
-            extractEl.classList.remove('error'); 
-            resultDiv.style.display = 'block';
+                // Parse the string text into a readable DOM structure
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlText, 'text/html');
 
-        } catch (error) {
-            // Handle parsing errors or 404s gracefully
-            titleEl.textContent = 'Error';
-            extractEl.textContent = error.message;
-            extractEl.classList.add('error');
-            resultDiv.style.display = 'block';
+                // Target the specific table by its ID
+                const sourceTable = doc.getElementById('ResizableTable');
+
+                if (!sourceTable) {
+                    throw new Error("Could not find a table with ID 'ResizableTable' on the target page.");
+                }
+
+                // 1. Rebuild the Custom Table element
+                const customTable = document.createElement('table');
+                customTable.className = 'custom-table';
+
+                // 2. Extract column headers from the <thead> tag's element title attributes
+                const thead = document.createElement('thead');
+                const headerRow = document.createElement('tr');
+                
+                // Finds elements inside thead that contain a title attribute (e.g., <th title="...">)
+                const sourceHeaders = sourceTable.querySelectorAll('thead [title]');
+                
+                if (sourceHeaders.length > 0) {
+                    sourceHeaders.forEach(headerEl => {
+                        const th = document.createElement('th');
+                        // Grab the value from the title attribute
+                        th.textContent = headerEl.getAttribute('title'); 
+                        headerRow.appendChild(th);
+                    });
+                } else {
+                    // Fallback if title attribute wasn't found but standard <th> tags exist
+                    const fallbackHeaders = sourceTable.querySelectorAll('thead th');
+                    fallbackHeaders.forEach(headerEl => {
+                        const th = document.createElement('th');
+                        th.textContent = headerEl.textContent.trim();
+                        headerRow.appendChild(th);
+                    });
+                }
+                thead.appendChild(headerRow);
+                customTable.appendChild(thead);
+
+                // 3. Extract the body rows and strip out extra HTML tags from cells
+                const tbody = document.createElement('tbody');
+                const sourceRows = sourceTable.querySelectorAll('tr');
+
+                sourceRows.forEach(row => {
+                    // Skip the row if it lives inside the thead section
+                    if (row.closest('thead')) return;
+
+                    const sourceCells = row.querySelectorAll('td');
+                    if (sourceCells.length === 0) return; // Skip empty rows
+
+                    const customRow = document.createElement('tr');
+
+                    sourceCells.forEach(cell => {
+                        const customCell = document.createElement('td');
+                        
+                        /* CRITICAL PART: .textContent automatically ignores any nested HTML tags 
+                           (like <span>, <a>, <strong>, etc.) and extracts only the pure text inside.
+                        */
+                        customCell.textContent = cell.textContent.trim();
+                        
+                        customRow.appendChild(customCell);
+                    });
+
+                    tbody.appendChild(customRow);
+                });
+
+                customTable.appendChild(tbody);
+
+                // Render the built custom table to the screen
+                container.innerHTML = "";
+                container.appendChild(customTable);
+
+            } catch (error) {
+                errorDiv.textContent = `Error: ${error.message}`;
+                container.innerHTML = "";
+                console.error(error);
+            }
         }
-    }
-</script>
-
+    </script>
 </body>
 </html>
