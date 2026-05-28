@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wikipedia Data Fetcher</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            width: 100%;
+            max-width: 600px;
+        }
+        h2 { color: #333; margin-top: 0; }
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+        input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            padding: 12px 20px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        button:hover { background-color: #2980b9; }
+        #result {
+            margin-top: 20px;
+            padding: 20px;
+            border-left: 4px solid #3498db;
+            background: #fdfdfd;
+            display: none;
+        }
+        #title { margin-top: 0; color: #2c3e50; }
+        #extract { line-height: 1.6; color: #555; }
+        .error { color: #e74c3c; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Dynamic Wikipedia Fetcher</h2>
+    <div class="search-box">
+        <input type="text" id="searchQuery" placeholder="Type a topic (e.g., Quantum Mechanics, Coffee)...">
+        <button onclick="fetchWikiData()">Fetch & Parse</button>
+    </div>
+
+    <div id="result">
+        <h3 id="title"></h3>
+        <p id="extract"></p>
+    </div>
+</div>
+
+<script>
+    async function fetchWikiData() {
+        const query = document.getElementById('searchQuery').value.trim();
+        const resultDiv = document.getElementById('result');
+        const titleEl = document.getElementById('title');
+        const extractEl = document.getElementById('extract');
+
+        if (!query) {
+            alert('Please enter a search topic.');
+            return;
+        }
+
+        // Wikipedia's official, CORS-enabled REST API endpoint for page summaries
+        const apiUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`;
+
+        try {
+            // 1. GET data from the external website
+            const response = await fetch(apiUrl);
+            
+            if (!response.ok) {
+                throw new Error('Topic not found or API error.');
+            }
+
+            // 2. Parse the incoming JSON data
+            const data = await response.json();
+
+            // 3. Represent the data back into the HTML DOM
+            titleEl.textContent = data.title;
+            extractEl.textContent = data.extract;
+            
+            // Remove error styling if a previous attempt failed
+            extractEl.classList.remove('error'); 
+            resultDiv.style.display = 'block';
+
+        } catch (error) {
+            // Handle parsing errors or 404s gracefully
+            titleEl.textContent = 'Error';
+            extractEl.textContent = error.message;
+            extractEl.classList.add('error');
+            resultDiv.style.display = 'block';
+        }
+    }
+</script>
+
+</body>
+</html>
