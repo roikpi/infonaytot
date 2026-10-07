@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TV Kiosk Presentation & Video Overlay Player</title>
+  <title>TV Kiosk Presentation & Hybrid Video Overlay Player</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    /* Prevent any unwanted scrollbars or interactions in TV mode */
+    /* Prevent scrollbars & hide mouse cursor for TV/Kiosk mode */
     body, html {
       margin: 0;
       padding: 0;
@@ -17,15 +17,15 @@
       height: 100%;
       overflow: hidden;
       background-color: #000000;
-      cursor: none; /* Hide mouse cursor for TV display */
+      cursor: none;
     }
     
-    /* Reveal mouse cursor if moved (useful for setup/debugging) */
+    /* Display cursor on mouse hover for maintenance/setup */
     body:hover {
       cursor: auto;
     }
 
-    /* Pulse animation for TV live badge */
+    /* Pulse animation for live status badge */
     @keyframes pulse-ring {
       0% { transform: scale(0.95); opacity: 0.8; }
       50% { transform: scale(1.1); opacity: 0.4; }
@@ -38,7 +38,7 @@
 </head>
 <body class="relative w-full h-full flex flex-col justify-center items-center bg-black overflow-hidden">
 
-  <!-- MAIN SLIDES / WEB IFRAME -->
+  <!-- MAIN SLIDES / WEBSITE IFRAME -->
   <iframe id="presentationFrame" 
     class="absolute inset-0 w-full h-full border-0 z-0 transition-opacity duration-1000 opacity-100" 
     allow="autoplay; encrypted-media; fullscreen"
@@ -49,26 +49,30 @@
   <div id="videoOverlay" 
     class="fixed inset-0 w-full h-full bg-black z-40 flex flex-col items-center justify-center transition-opacity duration-1000 opacity-0 pointer-events-none">
     
-    <!-- MP4 Video Tag -->
-    <video id="kioskVideoPlayer" 
-      class="w-full h-full object-contain" 
+    <!-- MP4 Video Element -->
+    <video id="html5VideoPlayer" 
+      class="w-full h-full object-contain hidden" 
       playsinline 
       preload="auto">
       <source id="videoSource" src="" type="video/mp4">
-      Your browser does not support HTML5 video playback.
     </video>
 
-    <!-- Optional Visual Banner during Video Break -->
+    <!-- YouTube IFrame Container -->
+    <div id="ytPlayerContainer" class="w-full h-full hidden pointer-events-none">
+      <div id="ytPlayer"></div>
+    </div>
+
+    <!-- Video Break Label -->
     <div id="videoBadge" class="absolute top-6 left-6 z-50 bg-black/70 backdrop-blur-md border border-amber-500/30 px-4 py-2 rounded-full flex items-center space-x-3 opacity-90">
       <span class="relative flex h-3 w-3">
         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
         <span class="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
       </span>
-      <span class="text-xs font-semibold tracking-wider text-amber-200 uppercase">Scheduled Video Break</span>
+      <span class="text-xs font-semibold tracking-wider text-amber-200 uppercase" id="videoBadgeText">Scheduled Video Break</span>
     </div>
   </div>
 
-  <!-- TV KIOSK CORNER STATUS BADGE (Configurable via SHOW_STATUS_BADGE) -->
+  <!-- TV KIOSK CORNER STATUS BADGE -->
   <div id="statusBadge" 
     class="fixed bottom-6 right-6 z-30 bg-slate-900/80 backdrop-blur-md border border-slate-800 text-slate-300 px-4 py-2.5 rounded-2xl shadow-2xl flex items-center space-x-3 text-xs font-medium transition-all duration-500 opacity-0">
     <div class="relative flex items-center justify-center">
@@ -81,7 +85,7 @@
     </div>
   </div>
 
-  <!-- AUTOPLAY / UNMUTE FALLBACK BANGER (Only shown if browser blocks audio autoplay) -->
+  <!-- AUTOPLAY / UNMUTE FALLBACK BANNER -->
   <div id="autoplayNotice" 
     class="fixed top-6 right-6 z-50 bg-indigo-900/90 border border-indigo-500/50 text-indigo-100 px-4 py-2.5 rounded-xl shadow-2xl flex items-center space-x-3 text-xs hidden cursor-pointer"
     onclick="handleUserGestureClick()">
@@ -91,39 +95,33 @@
 
   <script>
     /* ==========================================================================
-       TV KIOSK CONFIGURATION (EDIT PARAMETERS HERE FOR YOUR TV DISPLAY)
+       TV KIOSK CONFIGURATION
        ========================================================================== */
     const CONFIG = {
-      // 1. Google Slides or Web URL
-      // HOW TO USE GOOGLE SLIDES:
-      // Open your Google Slide -> Go to File > Share > Publish to web > Embed
-      // Copy the URL inside src="..." (e.g., https://docs.google.com/presentation/d/e/.../embed?start=true&loop=true&delayms=3000)
-      SLIDES_URL: "https://docs.google.com/presentation/d/e/2PACX-1vS0e4XKjckMvGGOeP366uJxSJY9kva6ANhT4vmRuRPMZ30llwT-uoGPfoz4JI_6DJ_NneEl5n8GTgIf/embed?start=true&loop=true&delayms=20000&rm=minimal",
+      // 1. Google Slides or Website Embed URL
+      SLIDES_URL: "https://docs.google.com/presentation/d/e/2PACX-1vQnNk23_ABJ-z4PtTuiKZ0ulY5y4DBUMrLrLxQ4e1oP05RAskLZvAlLIcL41SlbBkWOdjvFXlY1Hl8O/embed?start=true&loop=true&delayms=20000&rm=minimal",
 
-      // 2. MP4 Video Sources (Array of URLs - will cycle through sequentially or play single)
-      VIDEO_SOURCES: [
-        "./sample.mp4"
+      // 2. Hybrid Video Queue (Supports both MP4 files and YouTube Videos/Shorts/URLs)
+      VIDEO_QUEUE: [
+        { type: 'youtube', id: 'https://www.youtube.com/watch?v=QTeAzhe91aM' }
       ],
 
-      // 3. Frequency in MINUTES for playing the video overlay (e.g. 5 = every 5 mins, 0.5 = every 30 secs for testing)
-      INTERVAL_MINUTES: 0.5,
+      // 3. Frequency in MINUTES between video breaks (e.g. 5 = every 5 mins, 0.5 = 30 secs)
+      INTERVAL_MINUTES: 0.25,
 
-      // 4. Auto-refresh iframe periodically in HOURS to prevent memory accumulation / freeze on long-running TV displays
-      RELOAD_SLIDES_INTERVAL_HOURS: 6,
+      // 4. Periodic background iframe reload interval in HOURS to prevent memory leaks
+      SLIDES_RELOAD_INTERVAL_HOURS: 6,
 
-      // 5. Audio Settings
-      START_MUTED: false, // If true, video starts muted. If false, attempts unmuted playback with fallback
+      // 5. Audio configuration
+      MUTED_AUDIO: false, // Set to true to force quiet playback
 
-      // 6. UI Customization
-      SHOW_STATUS_BADGE: true, // Display the countdown badge in bottom corner
-      SHOW_VIDEO_BADGE: true,  // Display "Scheduled Video Break" label during overlay
-      
-      // 7. Auto Start
-      AUTO_START: true
+      // 6. UI Controls
+      SHOW_CORNER_INDICATOR: true, // Display small status badge in bottom right
+      AUTO_START: true             // Start kiosk timer immediately on boot
     };
 
     /* ==========================================================================
-       INTERNAL KIOSK ENGINE (NO NEED TO EDIT BELOW THIS LINE)
+       KIOSK STATE & YOUTUBE API HANDLING
        ========================================================================== */
     const state = {
       countdownSeconds: Math.round(CONFIG.INTERVAL_MINUTES * 60),
@@ -132,16 +130,20 @@
       currentVideoIndex: 0,
       isOverlayActive: false,
       userInteracted: false,
-      hasVideoError: false
+      ytPlayerReady: false,
+      ytPlayer: null,
+      activePlayerType: null, // 'mp4' or 'youtube'
+      safetyTimeoutId: null
     };
 
-    // DOM Elements
     const elements = {
       iframe: document.getElementById('presentationFrame'),
       overlay: document.getElementById('videoOverlay'),
-      videoPlayer: document.getElementById('kioskVideoPlayer'),
-      videoSource: document.getElementById('videoSource'),
+      mp4Player: document.getElementById('html5VideoPlayer'),
+      mp4Source: document.getElementById('videoSource'),
+      ytContainer: document.getElementById('ytPlayerContainer'),
       videoBadge: document.getElementById('videoBadge'),
+      videoBadgeText: document.getElementById('videoBadgeText'),
       statusBadge: document.getElementById('statusBadge'),
       statusDot: document.getElementById('statusDot'),
       statusPulse: document.getElementById('statusPulse'),
@@ -150,9 +152,67 @@
       autoplayNotice: document.getElementById('autoplayNotice')
     };
 
+    // Load YouTube IFrame API Script asynchronously
+    const ytScript = document.createElement('script');
+    ytScript.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(ytScript);
+
+    // YouTube API Ready Callback
+    function onYouTubeIframeAPIReady() {
+      state.ytPlayer = new YT.Player('ytPlayer', {
+        height: '100%',
+        width: '100%',
+        playerVars: {
+          'autoplay': 0,
+          'controls': 0,
+          'disablekb': 1,
+          'fs': 0,
+          'modestbranding': 1,
+          'rel': 0,
+          'showinfo': 0,
+          'iv_load_policy': 3
+        },
+        events: {
+          'onReady': onPlayerReady,
+          'onStateChange': onPlayerStateChange,
+          'onError': onPlayerError
+        }
+      });
+    }
+
+    function onPlayerReady(event) {
+      state.ytPlayerReady = true;
+    }
+
+    function onPlayerStateChange(event) {
+      // YT.PlayerState.ENDED === 0
+      if (event.data === YT.PlayerState.ENDED) {
+        clearSafetyTimeout();
+        resumePresentation();
+      }
+    }
+
+    function onPlayerError(event) {
+      console.warn('[TV Kiosk] YouTube Error encountered (code ' + event.data + '). Skipping video.');
+      clearSafetyTimeout();
+      resumePresentation();
+    }
 
     /**
-     * Formats seconds into MM:SS format
+     * Extracts YouTube Video ID from full URLs, Shorts URLs, or raw ID strings
+     */
+    function extractYouTubeId(urlOrId) {
+      if (!urlOrId) return '';
+      if (urlOrId.length === 11 && !urlOrId.includes('/') && !urlOrId.includes('?')) {
+        return urlOrId;
+      }
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
+      const match = urlOrId.match(regExp);
+      return (match && match[2].length === 11) ? match[2] : urlOrId;
+    }
+
+    /**
+     * Formats seconds into MM:SS display
      */
     function formatTime(totalSeconds) {
       const mins = Math.floor(totalSeconds / 60);
@@ -160,63 +220,32 @@
       return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
 
-    /**
-     * Initializes Iframe and Video player sources
-     */
     function initializeKiosk() {
-      // Set iframe source
       if (CONFIG.SLIDES_URL) {
         elements.iframe.src = CONFIG.SLIDES_URL;
       }
 
-      // Hide or show corner status badge according to config
-      if (CONFIG.SHOW_STATUS_BADGE) {
+      if (CONFIG.SHOW_CORNER_INDICATOR) {
         elements.statusBadge.classList.remove('opacity-0');
         elements.statusBadge.classList.add('opacity-100');
       }
 
-      // Hide video break indicator badge if disabled in config
-      if (!CONFIG.SHOW_VIDEO_BADGE) {
-        elements.videoBadge.classList.add('hidden');
-      }
-
-      // Setup initial video source
-      loadNextVideoSource();
-
-      // Schedule periodic background refresh of iframe to avoid memory leaks
-      if (CONFIG.RELOAD_SLIDES_INTERVAL_HOURS > 0) {
-        const refreshMs = CONFIG.RELOAD_SLIDES_INTERVAL_HOURS * 60 * 60 * 1000;
+      // Schedule periodic background refresh of slides iframe to prevent memory accumulation
+      if (CONFIG.SLIDES_RELOAD_INTERVAL_HOURS > 0) {
+        const refreshMs = CONFIG.SLIDES_RELOAD_INTERVAL_HOURS * 60 * 60 * 1000;
         state.slidesRefreshTimerId = setInterval(() => {
-          console.log('[TV Kiosk] Refreshing presentation iframe to clear memory...');
           if (!state.isOverlayActive) {
+            console.log('[TV Kiosk] Performing scheduled presentation refresh...');
             elements.iframe.src = elements.iframe.src;
           }
         }, refreshMs);
       }
 
-      // Start main interval timer
       if (CONFIG.AUTO_START) {
         startKioskTimer();
       }
     }
 
-    /**
-     * Loads the next video URL from the CONFIG array into the video element
-     */
-    function loadNextVideoSource() {
-      if (!CONFIG.VIDEO_SOURCES || CONFIG.VIDEO_SOURCES.length === 0) return;
-
-      const videoUrl = CONFIG.VIDEO_SOURCES[state.currentVideoIndex];
-      elements.videoSource.src = videoUrl;
-      elements.videoPlayer.load();
-
-      // Advance index for next loop cycle
-      state.currentVideoIndex = (state.currentVideoIndex + 1) % CONFIG.VIDEO_SOURCES.length;
-    }
-
-    /**
-     * Starts countdown timer loop
-     */
     function startKioskTimer() {
       if (state.timerId) clearInterval(state.timerId);
 
@@ -224,13 +253,11 @@
         if (!state.isOverlayActive) {
           state.countdownSeconds--;
 
-          // Update UI Status Badge
-          if (CONFIG.SHOW_STATUS_BADGE) {
+          if (CONFIG.SHOW_CORNER_INDICATOR) {
             elements.statusTitle.textContent = "Slides Active";
             elements.statusTimer.textContent = `Next video: ${formatTime(state.countdownSeconds)}`;
           }
 
-          // Trigger video when timer reaches zero
           if (state.countdownSeconds <= 0) {
             triggerVideoOverlay();
           }
@@ -238,108 +265,155 @@
       }, 1000);
     }
 
-
-    /**
-     * Displays video overlay and initiates MP4 playback
-     */
     function triggerVideoOverlay() {
-      state.isOverlayActive = true;
+      if (!CONFIG.VIDEO_QUEUE || CONFIG.VIDEO_QUEUE.length === 0) return;
 
-      // Update corner badge status
-      if (CONFIG.SHOW_STATUS_BADGE) {
+      state.isOverlayActive = true;
+      const item = CONFIG.VIDEO_QUEUE[state.currentVideoIndex];
+      state.activePlayerType = item.type;
+
+      // Update badge UI
+      if (CONFIG.SHOW_CORNER_INDICATOR) {
         elements.statusDot.className = "h-2.5 w-2.5 rounded-full bg-amber-500";
         elements.statusPulse.className = "absolute h-4 w-4 rounded-full bg-amber-500/40 animate-pulse-ring";
         elements.statusTitle.textContent = "Video Break";
         elements.statusTimer.textContent = "Playing...";
       }
 
-      // Bring overlay to front with fade-in
+      // Set fallback timer: if video hangs or fails to play within 10s, auto-resume slides
+      setSafetyTimeout(10000);
+
+      // Fade in overlay
       elements.overlay.classList.remove('opacity-0', 'pointer-events-none');
       elements.overlay.classList.add('opacity-100', 'pointer-events-auto');
 
-      // Playback setup
-      elements.videoPlayer.currentTime = 0;
-      elements.videoPlayer.muted = CONFIG.START_MUTED && !state.userInteracted;
+      if (item.type === 'youtube') {
+        playYouTubeVideo(item);
+      } else {
+        playMp4Video(item);
+      }
 
-      // Attempt playback
-      const playPromise = elements.videoPlayer.play();
+      // Advance queue index
+      state.currentVideoIndex = (state.currentVideoIndex + 1) % CONFIG.VIDEO_QUEUE.length;
+    }
 
+    function playMp4Video(item) {
+      elements.ytContainer.classList.add('hidden');
+      elements.mp4Player.classList.remove('hidden');
+      elements.videoBadgeText.textContent = "Scheduled Video Break (MP4)";
+
+      elements.mp4Source.src = item.url;
+      elements.mp4Player.load();
+      elements.mp4Player.currentTime = 0;
+      elements.mp4Player.muted = CONFIG.MUTED_AUDIO && !state.userInteracted;
+
+      const playPromise = elements.mp4Player.play();
       if (playPromise !== undefined) {
-        playPromise.catch(error => {
-          console.warn('[TV Kiosk] Autoplay prevented for unmuted video. Attempting muted playback fallback.', error);
-          
-          // Browser prevented audio autoplay: start muted and show subtle audio alert banner
-          elements.videoPlayer.muted = true;
-          elements.videoPlayer.play().catch(err => {
-            console.error('[TV Kiosk] Critical playback error:', err);
-            handleVideoError();
-          });
+        playPromise.then(() => {
+          clearSafetyTimeout();
+        }).catch(err => {
+          console.warn('[TV Kiosk] MP4 unmuted autoplay failed. Trying muted playback.', err);
+          elements.mp4Player.muted = true;
+          elements.mp4Player.play().then(() => clearSafetyTimeout()).catch(() => resumePresentation());
 
-          // Prompt for screen tap if unmuted audio is desired
-          if (!CONFIG.START_MUTED && !state.userInteracted) {
+          if (!CONFIG.MUTED_AUDIO && !state.userInteracted) {
             elements.autoplayNotice.classList.remove('hidden');
           }
         });
       }
     }
 
-    /**
-     * Hides video overlay, resets timer, and resumes presentation
-     */
+    function playYouTubeVideo(item) {
+      elements.mp4Player.classList.add('hidden');
+      elements.ytContainer.classList.remove('hidden');
+      elements.videoBadgeText.textContent = "Scheduled Video Break (YouTube)";
+
+      const ytId = extractYouTubeId(item.id || item.url);
+
+      if (state.ytPlayerReady && state.ytPlayer) {
+        if (CONFIG.MUTED_AUDIO && !state.userInteracted) {
+          state.ytPlayer.mute();
+        } else {
+          state.ytPlayer.unMute();
+        }
+
+        state.ytPlayer.loadVideoById(ytId);
+        
+        // Check if playback starts successfully
+        setTimeout(() => {
+          if (state.ytPlayer.getPlayerState() === YT.PlayerState.PLAYING || state.ytPlayer.getPlayerState() === YT.PlayerState.BUFFERING) {
+            clearSafetyTimeout();
+          }
+        }, 2000);
+
+      } else {
+        console.warn('[TV Kiosk] YouTube API not ready yet. Skipping to next slide.');
+        resumePresentation();
+      }
+    }
+
+    function setSafetyTimeout(ms) {
+      clearSafetyTimeout();
+      state.safetyTimeoutId = setTimeout(() => {
+        console.warn('[TV Kiosk] Safety timeout reached (video failed to start). Resuming slides.');
+        resumePresentation();
+      }, ms);
+    }
+
+    function clearSafetyTimeout() {
+      if (state.safetyTimeoutId) {
+        clearTimeout(state.safetyTimeoutId);
+        state.safetyTimeoutId = null;
+      }
+    }
+
     function resumePresentation() {
       if (!state.isOverlayActive) return;
 
+      clearSafetyTimeout();
       state.isOverlayActive = false;
-      elements.videoPlayer.pause();
 
-      // Fade-out video overlay
+      // Stop current playback
+      if (state.activePlayerType === 'youtube' && state.ytPlayer && state.ytPlayer.stopVideo) {
+        state.ytPlayer.stopVideo();
+      } else {
+        elements.mp4Player.pause();
+      }
+
+      // Fade out overlay
       elements.overlay.classList.remove('opacity-100', 'pointer-events-auto');
       elements.overlay.classList.add('opacity-0', 'pointer-events-none');
 
-      // Reset timer countdown
+      // Hide both player elements
+      elements.mp4Player.classList.add('hidden');
+      elements.ytContainer.classList.add('hidden');
+
+      // Reset countdown timer
       state.countdownSeconds = Math.round(CONFIG.INTERVAL_MINUTES * 60);
 
-      // Reset Badge Status
-      if (CONFIG.SHOW_STATUS_BADGE) {
+      // Reset badge
+      if (CONFIG.SHOW_CORNER_INDICATOR) {
         elements.statusDot.className = "h-2.5 w-2.5 rounded-full bg-emerald-500";
         elements.statusPulse.className = "absolute h-4 w-4 rounded-full bg-emerald-500/40 animate-pulse-ring";
         elements.statusTitle.textContent = "Slides Active";
         elements.statusTimer.textContent = `Next video: ${formatTime(state.countdownSeconds)}`;
       }
-
-      // Load next video in queue for next cycle
-      loadNextVideoSource();
     }
 
-    /**
-     * Fallback for video load or network errors to prevent hanging screen
-     */
-    function handleVideoError() {
-      console.error('[TV Kiosk] Video failed to play or load. Skipping break to preserve presentation.');
-      resumePresentation();
-    }
-
-    /**
-     * Unmutes TV audio upon user interaction (if restricted by browser)
-     */
     function handleUserGestureClick() {
       state.userInteracted = true;
-      elements.videoPlayer.muted = false;
+      elements.mp4Player.muted = false;
+      if (state.ytPlayer && state.ytPlayer.unMute) {
+        state.ytPlayer.unMute();
+      }
       elements.autoplayNotice.classList.add('hidden');
     }
 
+    // MP4 Event Listeners
+    elements.mp4Player.addEventListener('ended', () => resumePresentation());
+    elements.mp4Player.addEventListener('error', () => resumePresentation());
 
-    // Video playback ended event - automatically resume slides
-    elements.videoPlayer.addEventListener('ended', () => {
-      resumePresentation();
-    });
-
-    // Error handling - skip video if broken / offline
-    elements.videoPlayer.addEventListener('error', () => {
-      handleVideoError();
-    });
-
-    // Track user gesture to allow unmuted audio playback on strict TVs
+    // User gesture listener for TV audio unmuting
     window.addEventListener('click', () => {
       if (!state.userInteracted) {
         state.userInteracted = true;
@@ -347,10 +421,7 @@
       }
     });
 
-    // Start Kiosk when window loads
-    window.addEventListener('DOMContentLoaded', () => {
-      initializeKiosk();
-    });
+    window.addEventListener('DOMContentLoaded', () => initializeKiosk());
   </script>
 </body>
 </html>
