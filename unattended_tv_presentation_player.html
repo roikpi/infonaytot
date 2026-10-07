@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-black text-slate-100 select-none">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TV Kiosk Presentation & Video Overlay Player</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* Prevent any unwanted scrollbars or interactions in TV mode */
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #000000;
+      cursor: none; /* Hide mouse cursor for TV display */
+    }
+    
+    /* Reveal mouse cursor if moved (useful for setup/debugging) */
+    body:hover {
+      cursor: auto;
+    }
+
+    /* Pulse animation for TV live badge */
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.1); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .animate-pulse-ring {
+      animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+  </style>
+</head>
+<body class="relative w-full h-full flex flex-col justify-center items-center bg-black overflow-hidden">
+
+  <!-- MAIN SLIDES / WEB IFRAME -->
+  <iframe id="presentationFrame" 
+    class="absolute inset-0 w-full h-full border-0 z-0 transition-opacity duration-1000 opacity-100" 
+    allow="autoplay; encrypted-media; fullscreen"
+    sandbox="allow-scripts allow-same-origin allow-popups allow-forms">
+  </iframe>
+
+  <!-- VIDEO OVERLAY CONTAINER -->
+  <div id="videoOverlay" 
+    class="fixed inset-0 w-full h-full bg-black z-40 flex flex-col items-center justify-center transition-opacity duration-1000 opacity-0 pointer-events-none">
+    
+    <!-- MP4 Video Tag -->
+    <video id="kioskVideoPlayer" 
+      class="w-full h-full object-contain" 
+      playsinline 
+      preload="auto">
+      <source id="videoSource" src="" type="video/mp4">
+      Your browser does not support HTML5 video playback.
+    </video>
+
+    <!-- Optional Visual Banner during Video Break -->
+    <div id="videoBadge" class="absolute top-6 left-6 z-50 bg-black/70 backdrop-blur-md border border-amber-500/30 px-4 py-2 rounded-full flex items-center space-x-3 opacity-90">
+      <span class="relative flex h-3 w-3">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+      </span>
+      <span class="text-xs font-semibold tracking-wider text-amber-200 uppercase">Scheduled Video Break</span>
+    </div>
+  </div>
+
+  <!-- TV KIOSK CORNER STATUS BADGE (Configurable via SHOW_STATUS_BADGE) -->
+  <div id="statusBadge" 
+    class="fixed bottom-6 right-6 z-30 bg-slate-900/80 backdrop-blur-md border border-slate-800 text-slate-300 px-4 py-2.5 rounded-2xl shadow-2xl flex items-center space-x-3 text-xs font-medium transition-all duration-500 opacity-0">
+    <div class="relative flex items-center justify-center">
+      <span id="statusDot" class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+      <span id="statusPulse" class="absolute h-4 w-4 rounded-full bg-emerald-500/40 animate-pulse-ring"></span>
+    </div>
+    <div class="flex flex-col">
+      <span id="statusTitle" class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Kiosk Active</span>
+      <span id="statusTimer" class="font-mono text-xs text-white font-semibold">Initializing...</span>
+    </div>
+  </div>
+
+  <!-- AUTOPLAY / UNMUTE FALLBACK BANGER (Only shown if browser blocks audio autoplay) -->
+  <div id="autoplayNotice" 
+    class="fixed top-6 right-6 z-50 bg-indigo-900/90 border border-indigo-500/50 text-indigo-100 px-4 py-2.5 rounded-xl shadow-2xl flex items-center space-x-3 text-xs hidden cursor-pointer"
+    onclick="handleUserGestureClick()">
+    <i class="fa-solid fa-volume-xmark text-amber-400 text-sm"></i>
+    <span>Click screen once to enable TV Audio</span>
+  </div>
+
+  <script>
+    /* ==========================================================================
+       TV KIOSK CONFIGURATION (EDIT PARAMETERS HERE FOR YOUR TV DISPLAY)
+       ========================================================================== */
+    const CONFIG = {
+      // 1. Google Slides or Web URL
+      // HOW TO USE GOOGLE SLIDES:
+      // Open your Google Slide -> Go to File > Share > Publish to web > Embed
+      // Copy the URL inside src="..." (e.g., https://docs.google.com/presentation/d/e/.../embed?start=true&loop=true&delayms=3000)
+      SLIDES_URL: "https://docs.google.com/presentation/d/e/2PACX-1vQ3yrlzqr4hGS_oUyuv64x4Zv-3HZsvHgXBBMaNubZd9myUSMynoGIkLAaqgmb9FvAiDm9vxNGPLP_9/pub?start=false&loop=false&delayms=3000",
+
+      // 2. MP4 Video Sources (Array of URLs - will cycle through sequentially or play single)
+      VIDEO_SOURCES: [
+        "file:///C:/Users/VPALDA01/Downloads/sample.mp4"
+      ],
+
+      // 3. Frequency in MINUTES for playing the video overlay (e.g. 5 = every 5 mins, 0.5 = every 30 secs for testing)
+      INTERVAL_MINUTES: 0.5,
+
+      // 4. Auto-refresh iframe periodically in HOURS to prevent memory accumulation / freeze on long-running TV displays
+      RELOAD_SLIDES_INTERVAL_HOURS: 6,
+
+      // 5. Audio Settings
+      START_MUTED: false, // If true, video starts muted. If false, attempts unmuted playback with fallback
+
+      // 6. UI Customization
+      SHOW_STATUS_BADGE: true, // Display the countdown badge in bottom corner
+      SHOW_VIDEO_BADGE: true,  // Display "Scheduled Video Break" label during overlay
+      
+      // 7. Auto Start
+      AUTO_START: true
+    };
+
+    /* ==========================================================================
+       INTERNAL KIOSK ENGINE (NO NEED TO EDIT BELOW THIS LINE)
+       ========================================================================== */
+    const state = {
+      countdownSeconds: Math.round(CONFIG.INTERVAL_MINUTES * 60),
+      timerId: null,
+      slidesRefreshTimerId: null,
+      currentVideoIndex: 0,
+      isOverlayActive: false,
+      userInteracted: false,
+      hasVideoError: false
+    };
+
+    // DOM Elements
+    const elements = {
+      iframe: document.getElementById('presentationFrame'),
+      overlay: document.getElementById('videoOverlay'),
+      videoPlayer: document.getElementById('kioskVideoPlayer'),
+      videoSource: document.getElementById('videoSource'),
+      videoBadge: document.getElementById('videoBadge'),
+      statusBadge: document.getElementById('statusBadge'),
+      statusDot: document.getElementById('statusDot'),
+      statusPulse: document.getElementById('statusPulse'),
+      statusTitle: document.getElementById('statusTitle'),
+      statusTimer: document.getElementById('statusTimer'),
+      autoplayNotice: document.getElementById('autoplayNotice')
+    };
+
+
+    /**
+     * Formats seconds into MM:SS format
+     */
+    function formatTime(totalSeconds) {
+      const mins = Math.floor(totalSeconds / 60);
+      const secs = Math.floor(totalSeconds % 60);
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    /**
+     * Initializes Iframe and Video player sources
+     */
+    function initializeKiosk() {
+      // Set iframe source
+      if (CONFIG.SLIDES_URL) {
+        elements.iframe.src = CONFIG.SLIDES_URL;
+      }
+
+      // Hide or show corner status badge according to config
+      if (CONFIG.SHOW_STATUS_BADGE) {
+        elements.statusBadge.classList.remove('opacity-0');
+        elements.statusBadge.classList.add('opacity-100');
+      }
+
+      // Hide video break indicator badge if disabled in config
+      if (!CONFIG.SHOW_VIDEO_BADGE) {
+        elements.videoBadge.classList.add('hidden');
+      }
+
+      // Setup initial video source
+      loadNextVideoSource();
+
+      // Schedule periodic background refresh of iframe to avoid memory leaks
+      if (CONFIG.RELOAD_SLIDES_INTERVAL_HOURS > 0) {
+        const refreshMs = CONFIG.RELOAD_SLIDES_INTERVAL_HOURS * 60 * 60 * 1000;
+        state.slidesRefreshTimerId = setInterval(() => {
+          console.log('[TV Kiosk] Refreshing presentation iframe to clear memory...');
+          if (!state.isOverlayActive) {
+            elements.iframe.src = elements.iframe.src;
+          }
+        }, refreshMs);
+      }
+
+      // Start main interval timer
+      if (CONFIG.AUTO_START) {
+        startKioskTimer();
+      }
+    }
+
+    /**
+     * Loads the next video URL from the CONFIG array into the video element
+     */
+    function loadNextVideoSource() {
+      if (!CONFIG.VIDEO_SOURCES || CONFIG.VIDEO_SOURCES.length === 0) return;
+
+      const videoUrl = CONFIG.VIDEO_SOURCES[state.currentVideoIndex];
+      elements.videoSource.src = videoUrl;
+      elements.videoPlayer.load();
+
+      // Advance index for next loop cycle
+      state.currentVideoIndex = (state.currentVideoIndex + 1) % CONFIG.VIDEO_SOURCES.length;
+    }
+
+    /**
+     * Starts countdown timer loop
+     */
+    function startKioskTimer() {
+      if (state.timerId) clearInterval(state.timerId);
+
+      state.timerId = setInterval(() => {
+        if (!state.isOverlayActive) {
+          state.countdownSeconds--;
+
+          // Update UI Status Badge
+          if (CONFIG.SHOW_STATUS_BADGE) {
+            elements.statusTitle.textContent = "Slides Active";
+            elements.statusTimer.textContent = `Next video: ${formatTime(state.countdownSeconds)}`;
+          }
+
+          // Trigger video when timer reaches zero
+          if (state.countdownSeconds <= 0) {
+            triggerVideoOverlay();
+          }
+        }
+      }, 1000);
+    }
+
+
+    /**
+     * Displays video overlay and initiates MP4 playback
+     */
+    function triggerVideoOverlay() {
+      state.isOverlayActive = true;
+
+      // Update corner badge status
+      if (CONFIG.SHOW_STATUS_BADGE) {
+        elements.statusDot.className = "h-2.5 w-2.5 rounded-full bg-amber-500";
+        elements.statusPulse.className = "absolute h-4 w-4 rounded-full bg-amber-500/40 animate-pulse-ring";
+        elements.statusTitle.textContent = "Video Break";
+        elements.statusTimer.textContent = "Playing...";
+      }
+
+      // Bring overlay to front with fade-in
+      elements.overlay.classList.remove('opacity-0', 'pointer-events-none');
+      elements.overlay.classList.add('opacity-100', 'pointer-events-auto');
+
+      // Playback setup
+      elements.videoPlayer.currentTime = 0;
+      elements.videoPlayer.muted = CONFIG.START_MUTED && !state.userInteracted;
+
+      // Attempt playback
+      const playPromise = elements.videoPlayer.play();
+
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.warn('[TV Kiosk] Autoplay prevented for unmuted video. Attempting muted playback fallback.', error);
+          
+          // Browser prevented audio autoplay: start muted and show subtle audio alert banner
+          elements.videoPlayer.muted = true;
+          elements.videoPlayer.play().catch(err => {
+            console.error('[TV Kiosk] Critical playback error:', err);
+            handleVideoError();
+          });
+
+          // Prompt for screen tap if unmuted audio is desired
+          if (!CONFIG.START_MUTED && !state.userInteracted) {
+            elements.autoplayNotice.classList.remove('hidden');
+          }
+        });
+      }
+    }
+
+    /**
+     * Hides video overlay, resets timer, and resumes presentation
+     */
+    function resumePresentation() {
+      if (!state.isOverlayActive) return;
+
+      state.isOverlayActive = false;
+      elements.videoPlayer.pause();
+
+      // Fade-out video overlay
+      elements.overlay.classList.remove('opacity-100', 'pointer-events-auto');
+      elements.overlay.classList.add('opacity-0', 'pointer-events-none');
+
+      // Reset timer countdown
+      state.countdownSeconds = Math.round(CONFIG.INTERVAL_MINUTES * 60);
+
+      // Reset Badge Status
+      if (CONFIG.SHOW_STATUS_BADGE) {
+        elements.statusDot.className = "h-2.5 w-2.5 rounded-full bg-emerald-500";
+        elements.statusPulse.className = "absolute h-4 w-4 rounded-full bg-emerald-500/40 animate-pulse-ring";
+        elements.statusTitle.textContent = "Slides Active";
+        elements.statusTimer.textContent = `Next video: ${formatTime(state.countdownSeconds)}`;
+      }
+
+      // Load next video in queue for next cycle
+      loadNextVideoSource();
+    }
+
+    /**
+     * Fallback for video load or network errors to prevent hanging screen
+     */
+    function handleVideoError() {
+      console.error('[TV Kiosk] Video failed to play or load. Skipping break to preserve presentation.');
+      resumePresentation();
+    }
+
+    /**
+     * Unmutes TV audio upon user interaction (if restricted by browser)
+     */
+    function handleUserGestureClick() {
+      state.userInteracted = true;
+      elements.videoPlayer.muted = false;
+      elements.autoplayNotice.classList.add('hidden');
+    }
+
+
+    // Video playback ended event - automatically resume slides
+    elements.videoPlayer.addEventListener('ended', () => {
+      resumePresentation();
+    });
+
+    // Error handling - skip video if broken / offline
+    elements.videoPlayer.addEventListener('error', () => {
+      handleVideoError();
+    });
+
+    // Track user gesture to allow unmuted audio playback on strict TVs
+    window.addEventListener('click', () => {
+      if (!state.userInteracted) {
+        state.userInteracted = true;
+        elements.autoplayNotice.classList.add('hidden');
+      }
+    });
+
+    // Start Kiosk when window loads
+    window.addEventListener('DOMContentLoaded', () => {
+      initializeKiosk();
+    });
+  </script>
+</body>
+</html>
