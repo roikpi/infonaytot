@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="refresh" content="82">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: black;
+      overflow: hidden;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      overflow: hidden;
+    }
+
+    /* Overlay container fixed to lower right corner */
+    #flickr-overlay {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      width: 320px;
+      height: 220px;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      background: #000;
+      z-index: 9999;
+    }
+
+    #flickr-overlay img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: opacity 1s ease-in-out;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Google Slides Embed -->
+  <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vQnNk23_ABJ-z4PtTuiKZ0ulY5y4DBUMrLrLxQ4e1oP05RAskLZvAlLIcL41SlbBkWOdjvFXlY1Hl8O/embed?start=true&loop=true&delayms=20000&rm=minimal" 
+          allowfullscreen="true" 
+          mozallowfullscreen="true" 
+          webkitallowfullscreen="true">
+  </iframe>
+
+  <!-- Flickr Overlay -->
+  <div id="flickr-overlay">
+    <img id="flickr-img" src="" alt="Flickr Slide" />
+  </div>
+
+  <script>
+    // Replace with your Flickr Album / User RSS feed URL (using api.rss2json.com to parse XML to JSON)
+    const FLICKR_FEED_URL = 'https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.flickr.com%2Fservices%2Ffeeds%2Fphotos_public.gne%3Fformat%3Drss_200';
+    const ROTATE_INTERVAL_MS = 6000; // Rotate image every 6 seconds
+
+    let images = [];
+    let currentIndex = 0;
+    const imgElement = document.getElementById('flickr-img');
+
+    async function loadFlickrFeed() {
+      try {
+        const res = await fetch("https://flic.kr/s/aHskCyHZAb");
+        const data = await res.json();
+        
+        if (data.items && data.items.length > 0) {
+          // Extract image URLs from enclosure or content
+          images = data.items.map(item => item.enclosure.link || item.thumbnail);
+          showNextImage();
+          setInterval(showNextImage, ROTATE_INTERVAL_MS);
+        }
+      } catch (err) {
+        console.error('Failed to load Flickr feed:', err);
+      }
+    }
+
+    function showNextImage() {
+      if (images.length === 0) return;
+      imgElement.style.opacity = '0';
+      setTimeout(() => {
+        imgElement.src = images[currentIndex];
+        imgElement.style.opacity = '1';
+        currentIndex = (currentIndex + 1) % images.length;
+      }, 500);
+    }
+
+    loadFlickrFeed();
+  </script>
+
+</body>
+</html>
