@@ -19,14 +19,14 @@
       overflow: hidden;
     }
 
-    /* Overlay container fixed to lower right corner */
+    /* Responsive Overlay: 20% of viewport width */
     #image-overlay {
       position: absolute;
-      bottom: 24px;
-      right: 24px;
-      width: 320px;
-      height: 220px;
-      border-radius: 12px;
+      bottom: 2vw;
+      right: 2vw;
+      width: 20vw;             /* Takes 20% of available screen width */
+      height: 13.33vw;         /* 3:2 aspect ratio relative to width */
+      border-radius: 6px;      /* Less rounded corners */
       overflow: hidden;
       box-shadow: 0 8px 24px rgba(0,0,0,0.6);
       border: 2px solid rgba(255, 255, 255, 0.2);
@@ -72,7 +72,6 @@
     function showNextImage() {
       if (images.length === 0) return;
       
-      // Smooth fade transition
       imgElement.style.opacity = '0';
       
       setTimeout(() => {
@@ -82,10 +81,7 @@
       }, 400);
     }
 
-    // Load first image immediately
     showNextImage();
-
-    // Start rotation loop
     setInterval(showNextImage, ROTATE_INTERVAL_MS);
   </script>
 
